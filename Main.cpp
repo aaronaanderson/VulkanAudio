@@ -1,8 +1,9 @@
 #include <cmath>
 #include "DAC.hpp"
-#include <vulkan/vulkan.hpp>
+#include "Compute.hpp"
 
 DeviceParameters deviceParameters (512, 48000);
+Compute compute;
 
 double phase = 0.0;
 double phaseIncrement = 440.0 * 2.0 * M_PI / static_cast<double> (deviceParameters.sampleRate);
