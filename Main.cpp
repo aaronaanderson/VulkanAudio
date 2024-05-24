@@ -12,13 +12,13 @@ void audioCallback(float* outputBuffer, float* inputBuffer,
                    int numFrames, int numInputChannels, int numOutputChannels) 
 {
     // CPU Sine
-    for (int i = 0; i < numFrames; i++)
-    {
-        for (int channel = 0; channel < numOutputChannels; channel++)
-            outputBuffer[i * numOutputChannels + channel] = static_cast<float> (std::sin(phase) * 0.1);
+    // for (int i = 0; i < numFrames; i++)
+    // {
+    //     for (int channel = 0; channel < numOutputChannels; channel++)
+    //         outputBuffer[i * numOutputChannels + channel] = static_cast<float> (std::sin(phase) * 0.1);
 
-        phase += phaseIncrement;
-    }
+    //     phase += phaseIncrement;
+    // }
 }  
 
 int main()
