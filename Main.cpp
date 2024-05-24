@@ -1,6 +1,6 @@
 #include <cmath>
 #include "DAC.hpp"
-#include "Compute.hpp"
+#include "Compute/Compute.hpp"
 
 DeviceParameters deviceParameters (512, 48000);
 Compute compute;
