@@ -107,9 +107,6 @@ private:
 
 	void createInstance(const VkApplicationInfo& appInfo)
 	{
-		/*
-			Vulkan instance creation (without surface extensions)
-		*/
 		VkInstanceCreateInfo instanceCreateInfo = {};
 		instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 		instanceCreateInfo.pApplicationInfo = &appInfo;
@@ -273,140 +270,131 @@ private:
 		std::generate(computeInput.begin(), computeInput.end(), [&n] { return n++; });
 
 		// Copy input data to VRAM using a staging buffer
-		{
-			createBuffer(
-				VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-				VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
-				&hostBuffer,
-				&hostMemory,
-				bufferSize,
-				computeInput.data());
+		createBuffer(
+			VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT,
+			&hostBuffer,
+			&hostMemory,
+			bufferSize,
+			computeInput.data());
 
-			// Flush writes to host visible buffer
-			void* mapped;
-			vkMapMemory(device, hostMemory, 0, VK_WHOLE_SIZE, 0, &mapped);
-			VkMappedMemoryRange mappedRange = vks::initializers::mappedMemoryRange();
-			mappedRange.memory = hostMemory;
-			mappedRange.offset = 0;
-			mappedRange.size = VK_WHOLE_SIZE;
-			vkFlushMappedMemoryRanges(device, 1, &mappedRange);
-			vkUnmapMemory(device, hostMemory);
+		// Flush writes to host visible buffer
+		void* mapped;
+		vkMapMemory(device, hostMemory, 0, VK_WHOLE_SIZE, 0, &mapped);
+		VkMappedMemoryRange mappedRange = vks::initializers::mappedMemoryRange();
+		mappedRange.memory = hostMemory;
+		mappedRange.offset = 0;
+		mappedRange.size = VK_WHOLE_SIZE;
+		vkFlushMappedMemoryRanges(device, 1, &mappedRange);
+		vkUnmapMemory(device, hostMemory);
 
-			createBuffer(
-				VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-				VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-				&deviceBuffer,
-				&deviceMemory,
-				bufferSize);
+		createBuffer(
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+			VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+			&deviceBuffer,
+			&deviceMemory,
+			bufferSize);
 
-			// Copy to staging buffer
-			VkCommandBufferAllocateInfo cmdBufAllocateInfo = vks::initializers::commandBufferAllocateInfo(commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
-			VkCommandBuffer copyCmd;
-			VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &copyCmd));
-			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
-			VK_CHECK_RESULT(vkBeginCommandBuffer(copyCmd, &cmdBufInfo));
+		// Copy to staging buffer
+		VkCommandBufferAllocateInfo cmdBufAllocateInfo = vks::initializers::commandBufferAllocateInfo(commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
+		VkCommandBuffer copyCmd;
+		VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &copyCmd));
+		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+		VK_CHECK_RESULT(vkBeginCommandBuffer(copyCmd, &cmdBufInfo));
 
-			VkBufferCopy copyRegion = {};
-			copyRegion.size = bufferSize;
-			vkCmdCopyBuffer(copyCmd, hostBuffer, deviceBuffer, 1, &copyRegion);
-			VK_CHECK_RESULT(vkEndCommandBuffer(copyCmd));
+		VkBufferCopy copyRegion = {};
+		copyRegion.size = bufferSize;
+		vkCmdCopyBuffer(copyCmd, hostBuffer, deviceBuffer, 1, &copyRegion);
+		VK_CHECK_RESULT(vkEndCommandBuffer(copyCmd));
 
-			VkSubmitInfo submitInfo = vks::initializers::submitInfo();
-			submitInfo.commandBufferCount = 1;
-			submitInfo.pCommandBuffers = &copyCmd;
-			VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
-			VkFence fence;
-			VK_CHECK_RESULT(vkCreateFence(device, &fenceInfo, nullptr, &fence));
+		VkSubmitInfo submitInfo = vks::initializers::submitInfo();
+		submitInfo.commandBufferCount = 1;
+		submitInfo.pCommandBuffers = &copyCmd;
+		VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
+		VkFence fence;
+		VK_CHECK_RESULT(vkCreateFence(device, &fenceInfo, nullptr, &fence));
 
-			// Submit to the queue
-			VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence));
-			VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
+		// Submit to the queue
+		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence));
+		VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
 
-			vkDestroyFence(device, fence, nullptr);
-			vkFreeCommandBuffers(device, commandPool, 1, &copyCmd);
-		}
+		vkDestroyFence(device, fence, nullptr);
+		vkFreeCommandBuffers(device, commandPool, 1, &copyCmd);
+		
 	}
 	void prepareComputePipeline()
 	{
-		{
-			std::vector<VkDescriptorPoolSize> poolSizes = {
-				vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1),
+		
+		std::vector<VkDescriptorPoolSize> poolSizes = {
+			vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1),
+		};
+
+		VkDescriptorPoolCreateInfo descriptorPoolInfo =
+			vks::initializers::descriptorPoolCreateInfo(static_cast<uint32_t>(poolSizes.size()), poolSizes.data(), 1);
+		VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &descriptorPool));
+
+		std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
+			vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0),
+		};
+		VkDescriptorSetLayoutCreateInfo descriptorLayout =
+			vks::initializers::descriptorSetLayoutCreateInfo(setLayoutBindings);
+		VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &descriptorSetLayout));
+
+		VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo =
+			vks::initializers::pipelineLayoutCreateInfo(&descriptorSetLayout, 1);
+		VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
+
+		VkDescriptorSetAllocateInfo allocInfo =
+			vks::initializers::descriptorSetAllocateInfo(descriptorPool, &descriptorSetLayout, 1);
+		VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet));
+
+		VkDescriptorBufferInfo bufferDescriptor = { deviceBuffer, 0, VK_WHOLE_SIZE };
+		std::vector<VkWriteDescriptorSet> computeWriteDescriptorSets = {
+			vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0, &bufferDescriptor),
 			};
+		vkUpdateDescriptorSets(device, static_cast<uint32_t>(computeWriteDescriptorSets.size()), computeWriteDescriptorSets.data(), 0, NULL);
 
-			VkDescriptorPoolCreateInfo descriptorPoolInfo =
-				vks::initializers::descriptorPoolCreateInfo(static_cast<uint32_t>(poolSizes.size()), poolSizes.data(), 1);
-			VK_CHECK_RESULT(vkCreateDescriptorPool(device, &descriptorPoolInfo, nullptr, &descriptorPool));
+		VkPipelineCacheCreateInfo pipelineCacheCreateInfo = {};
+		pipelineCacheCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
+		VK_CHECK_RESULT(vkCreatePipelineCache(device, &pipelineCacheCreateInfo, nullptr, &pipelineCache));
 
-			std::vector<VkDescriptorSetLayoutBinding> setLayoutBindings = {
-				vks::initializers::descriptorSetLayoutBinding(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT, 0),
-			};
-			VkDescriptorSetLayoutCreateInfo descriptorLayout =
-				vks::initializers::descriptorSetLayoutCreateInfo(setLayoutBindings);
-			VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayout, nullptr, &descriptorSetLayout));
+		// Create pipeline
+		VkComputePipelineCreateInfo computePipelineCreateInfo = vks::initializers::computePipelineCreateInfo(pipelineLayout, 0);
 
-			VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo =
-				vks::initializers::pipelineLayoutCreateInfo(&descriptorSetLayout, 1);
-			VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCreateInfo, nullptr, &pipelineLayout));
+		// Pass SSBO size via specialization constant
+		struct SpecializationData {
+			uint32_t BUFFER_ELEMENT_COUNT = BUFFER_ELEMENTS;
+		} specializationData;
+		VkSpecializationMapEntry specializationMapEntry = vks::initializers::specializationMapEntry(0, 0, sizeof(uint32_t));
+		VkSpecializationInfo specializationInfo = vks::initializers::specializationInfo(1, &specializationMapEntry, sizeof(SpecializationData), &specializationData);
 
-			VkDescriptorSetAllocateInfo allocInfo =
-				vks::initializers::descriptorSetAllocateInfo(descriptorPool, &descriptorSetLayout, 1);
-			VK_CHECK_RESULT(vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet));
+		VkPipelineShaderStageCreateInfo shaderStage = {};
+		shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+		shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 
-			VkDescriptorBufferInfo bufferDescriptor = { deviceBuffer, 0, VK_WHOLE_SIZE };
-			std::vector<VkWriteDescriptorSet> computeWriteDescriptorSets = {
-				vks::initializers::writeDescriptorSet(descriptorSet, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 0, &bufferDescriptor),
-			};
-			vkUpdateDescriptorSets(device, static_cast<uint32_t>(computeWriteDescriptorSets.size()), computeWriteDescriptorSets.data(), 0, NULL);
+        const std::string shadersPath = SHADER_BINARY_PATH;
+		shaderStage.module = vks::tools::loadShader((shadersPath + "SineKernel.comp.spv").c_str(), device);
 
-			VkPipelineCacheCreateInfo pipelineCacheCreateInfo = {};
-			pipelineCacheCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO;
-			VK_CHECK_RESULT(vkCreatePipelineCache(device, &pipelineCacheCreateInfo, nullptr, &pipelineCache));
+		shaderStage.pName = "main";
+		shaderStage.pSpecializationInfo = &specializationInfo;
+		shaderModule = shaderStage.module;
 
-			// Create pipeline
-			VkComputePipelineCreateInfo computePipelineCreateInfo = vks::initializers::computePipelineCreateInfo(pipelineLayout, 0);
+		assert(shaderStage.module != VK_NULL_HANDLE);
+		computePipelineCreateInfo.stage = shaderStage;
+		VK_CHECK_RESULT(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &pipeline));
 
-			// Pass SSBO size via specialization constant
-			struct SpecializationData {
-				uint32_t BUFFER_ELEMENT_COUNT = BUFFER_ELEMENTS;
-			} specializationData;
-			VkSpecializationMapEntry specializationMapEntry = vks::initializers::specializationMapEntry(0, 0, sizeof(uint32_t));
-			VkSpecializationInfo specializationInfo = vks::initializers::specializationInfo(1, &specializationMapEntry, sizeof(SpecializationData), &specializationData);
+		// Create a command buffer for compute operations
+		VkCommandBufferAllocateInfo cmdBufAllocateInfo =
+			vks::initializers::commandBufferAllocateInfo(commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
+		VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &commandBuffer));
 
-			std::string shaderDir = "glsl";
-			if (commandLineParser.isSet("shaders")) {
-				shaderDir = commandLineParser.getValueAsString("shaders", "glsl");
-			}
-			// const std::string shadersPath = getShaderBasePath() + shaderDir + "/computeheadless/";
-            //const std::string shadersPath = "C:/Users/Anderson/Documents/Experimental/VulkanAudio/build/Shaders/";
-            const std::string shadersPath = SHADER_BINARY_PATH;
-			
-			VkPipelineShaderStageCreateInfo shaderStage = {};
-			shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-			shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-
-			shaderStage.module = vks::tools::loadShader((shadersPath + "SineKernel.comp.spv").c_str(), device);
-
-			shaderStage.pName = "main";
-			shaderStage.pSpecializationInfo = &specializationInfo;
-			shaderModule = shaderStage.module;
-
-			assert(shaderStage.module != VK_NULL_HANDLE);
-			computePipelineCreateInfo.stage = shaderStage;
-			VK_CHECK_RESULT(vkCreateComputePipelines(device, pipelineCache, 1, &computePipelineCreateInfo, nullptr, &pipeline));
-
-			// Create a command buffer for compute operations
-			VkCommandBufferAllocateInfo cmdBufAllocateInfo =
-				vks::initializers::commandBufferAllocateInfo(commandPool, VK_COMMAND_BUFFER_LEVEL_PRIMARY, 1);
-			VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &commandBuffer));
-
-			// Fence for compute CB sync
-			VkFenceCreateInfo fenceCreateInfo = vks::initializers::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
-			VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
-		}
+		// Fence for compute CB sync
+		VkFenceCreateInfo fenceCreateInfo = vks::initializers::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
+		VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
 	} 
 	void createCommandBuffer()
 	{
-        {
+        
 			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 
 			VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &cmdBufInfo));
@@ -474,7 +462,7 @@ private:
 				0, nullptr);
 
 			VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
-		}
+		
 	}
 	void submitComputeWork()
 	{
