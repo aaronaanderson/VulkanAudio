@@ -50,14 +50,13 @@ foreach(SHADER ${SHADERS})
 endforeach()
 
 add_custom_target(shaders DEPENDS ${SHADER_OUT_NAMES})
-message ("Shader out names: ${SHADER_OUT_NAMES}")
+add_dependencies(VulkanAudio shaders)
 
 set_target_properties(VulkanAudio PROPERTIES 
 DEBUG_POSTFIX _DEBUG 
 CXX_STANDARD 17
 CXX_STANDARD_REQUIRED ON
 )
-target_include_directories(VulkanAudio PRIVATE ${Vulkan_INCLUDE_DIRS})
 
+target_include_directories(VulkanAudio PRIVATE ${Vulkan_INCLUDE_DIRS})
 target_link_libraries(VulkanAudio PRIVATE ${Vulkan_LIBRARIES} rtaudio)
-add_dependencies(VulkanAudio shaders)
