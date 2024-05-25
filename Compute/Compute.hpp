@@ -14,7 +14,7 @@
 #if defined(VK_USE_PLATFORM_MACOS_MVK)
 #define VK_ENABLE_BETA_EXTENSIONS
 #endif
-// #include <vulkan/vulkan.hpp>
+
 #include <vulkan/vulkan.h>
 #include "VulkanTools.h"
 #include "CommandLineParser.hpp"
@@ -41,13 +41,46 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugMessageCallback(
 
 CommandLineParser commandLineParser;
 
-const std::string getShaderBasePath()
-{
-	return "../Compute/";
-}
 class Compute
 {
 public:
+	Compute()
+	{
+		LOG("Running headless compute example\n");
+
+		VkApplicationInfo appInfo = {};
+		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+		appInfo.pApplicationName = "Vulkan Audio Example";
+		appInfo.pEngineName = "VulkanAudio";
+		appInfo.apiVersion = VK_API_VERSION_1_0;
+
+        createInstance (appInfo);
+        createDevice();
+        createComputeQueue();
+        createCommandPool();
+        prepareBuffers();
+		prepareComputePipeline();
+        createCommandBuffer();
+		submitComputeWork();
+		copyDataToHost();
+
+		vkQueueWaitIdle(queue);
+
+		// Output buffer contents
+		LOG("Compute input:\n");
+		for (auto v : computeInput) {
+			LOG("%d \t", v);
+		}
+		std::cout << std::endl;
+
+		LOG("Compute output:\n");
+		for (auto v : computeOutput) {
+			LOG("%d \t", v);
+		}
+		std::cout << std::endl;
+	}
+	~Compute(){ releaseResources(); }
+private:
 	VkInstance instance;
 	VkPhysicalDevice physicalDevice;
 	VkDevice device;
@@ -66,57 +99,14 @@ public:
 
 	VkDebugReportCallbackEXT debugReportCallback{};
 
-	VkResult createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, VkBuffer *buffer, VkDeviceMemory *memory, VkDeviceSize size, void *data = nullptr)
+    std::vector<uint32_t> computeInput;
+	std::vector<uint32_t> computeOutput;
+	VkBuffer deviceBuffer, hostBuffer;
+	VkDeviceMemory deviceMemory, hostMemory;
+	const VkDeviceSize bufferSize = BUFFER_ELEMENTS * sizeof(uint32_t);
+
+	void createInstance(const VkApplicationInfo& appInfo)
 	{
-		// Create the buffer handle
-		VkBufferCreateInfo bufferCreateInfo = vks::initializers::bufferCreateInfo(usageFlags, size);
-		bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-		VK_CHECK_RESULT(vkCreateBuffer(device, &bufferCreateInfo, nullptr, buffer));
-
-		// Create the memory backing up the buffer handle
-		VkPhysicalDeviceMemoryProperties deviceMemoryProperties;
-		vkGetPhysicalDeviceMemoryProperties(physicalDevice, &deviceMemoryProperties);
-		VkMemoryRequirements memReqs;
-		VkMemoryAllocateInfo memAlloc = vks::initializers::memoryAllocateInfo();
-		vkGetBufferMemoryRequirements(device, *buffer, &memReqs);
-		memAlloc.allocationSize = memReqs.size;
-		// Find a memory type index that fits the properties of the buffer
-		bool memTypeFound = false;
-		for (uint32_t i = 0; i < deviceMemoryProperties.memoryTypeCount; i++) {
-			if ((memReqs.memoryTypeBits & 1) == 1) {
-				if ((deviceMemoryProperties.memoryTypes[i].propertyFlags & memoryPropertyFlags) == memoryPropertyFlags) {
-					memAlloc.memoryTypeIndex = i;
-					memTypeFound = true;
-					break;
-				}
-			}
-			memReqs.memoryTypeBits >>= 1;
-		}
-		assert(memTypeFound);
-		VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, memory));
-
-		if (data != nullptr) {
-			void *mapped;
-			VK_CHECK_RESULT(vkMapMemory(device, *memory, 0, size, 0, &mapped));
-			memcpy(mapped, data, size);
-			vkUnmapMemory(device, *memory);
-		}
-
-		VK_CHECK_RESULT(vkBindBufferMemory(device, *buffer, *memory, 0));
-
-		return VK_SUCCESS;
-	}
-
-	Compute()
-	{
-		LOG("Running headless compute example\n");
-
-		VkApplicationInfo appInfo = {};
-		appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-		appInfo.pApplicationName = "Vulkan headless example";
-		appInfo.pEngineName = "VulkanExample";
-		appInfo.apiVersion = VK_API_VERSION_1_0;
-
 		/*
 			Vulkan instance creation (without surface extensions)
 		*/
@@ -184,7 +174,7 @@ public:
 		instanceCreateInfo.enabledExtensionCount = (uint32_t)instanceExtensions.size();
 		instanceCreateInfo.ppEnabledExtensionNames = instanceExtensions.data();
 		VK_CHECK_RESULT(vkCreateInstance(&instanceCreateInfo, nullptr, &instance));
-
+	
 #if DEBUG
 		if (layersAvailable) {
 			VkDebugReportCallbackCreateInfoEXT debugReportCreateInfo = {};
@@ -197,11 +187,10 @@ public:
 			assert(vkCreateDebugReportCallbackEXT);
 			VK_CHECK_RESULT(vkCreateDebugReportCallbackEXT(instance, &debugReportCreateInfo, nullptr, &debugReportCallback));
 		}
-#endif
-
-		/*
-			Vulkan device creation
-		*/
+#endif	
+	}
+	void createDevice()
+	{
 		// Physical device (always use first)
 		uint32_t deviceCount = 0;
 		VK_CHECK_RESULT(vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr));
@@ -259,10 +248,13 @@ public:
 		deviceCreateInfo.enabledExtensionCount = (uint32_t)deviceExtensions.size();
 		deviceCreateInfo.ppEnabledExtensionNames = deviceExtensions.data();
 		VK_CHECK_RESULT(vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device));
-
-		// Get a compute queue
+	}
+	void createComputeQueue()
+	{
 		vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
-
+	}
+	void createCommandPool()
+	{
 		// Compute command pool
 		VkCommandPoolCreateInfo cmdPoolInfo = {};
 		cmdPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -270,20 +262,15 @@ public:
 		cmdPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 		VK_CHECK_RESULT(vkCreateCommandPool(device, &cmdPoolInfo, nullptr, &commandPool));
 
-		/*
-			Prepare storage buffers
-		*/
-		std::vector<uint32_t> computeInput(BUFFER_ELEMENTS);
-		std::vector<uint32_t> computeOutput(BUFFER_ELEMENTS);
+	}
+	void prepareBuffers()
+	{
+		computeInput.resize (BUFFER_ELEMENTS);
+		computeOutput.resize (BUFFER_ELEMENTS);
 
 		// Fill input data
 		uint32_t n = 0;
 		std::generate(computeInput.begin(), computeInput.end(), [&n] { return n++; });
-
-		const VkDeviceSize bufferSize = BUFFER_ELEMENTS * sizeof(uint32_t);
-
-		VkBuffer deviceBuffer, hostBuffer;
-		VkDeviceMemory deviceMemory, hostMemory;
 
 		// Copy input data to VRAM using a staging buffer
 		{
@@ -338,10 +325,9 @@ public:
 			vkDestroyFence(device, fence, nullptr);
 			vkFreeCommandBuffers(device, commandPool, 1, &copyCmd);
 		}
-
-		/*
-			Prepare compute pipeline
-		*/
+	}
+	void prepareComputePipeline()
+	{
 		{
 			std::vector<VkDescriptorPoolSize> poolSizes = {
 				vks::initializers::descriptorPoolSize(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1),
@@ -417,11 +403,10 @@ public:
 			VkFenceCreateInfo fenceCreateInfo = vks::initializers::fenceCreateInfo(VK_FENCE_CREATE_SIGNALED_BIT);
 			VK_CHECK_RESULT(vkCreateFence(device, &fenceCreateInfo, nullptr, &fence));
 		}
-
-		/*
-			Command buffer creation (for compute work submission)
-		*/
-		{
+	} 
+	void createCommandBuffer()
+	{
+        {
 			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 
 			VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &cmdBufInfo));
@@ -489,55 +474,41 @@ public:
 				0, nullptr);
 
 			VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
-
-			// Submit compute work
-			vkResetFences(device, 1, &fence);
-			const VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
-			VkSubmitInfo computeSubmitInfo = vks::initializers::submitInfo();
-			computeSubmitInfo.pWaitDstStageMask = &waitStageMask;
-			computeSubmitInfo.commandBufferCount = 1;
-			computeSubmitInfo.pCommandBuffers = &commandBuffer;
-			VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &computeSubmitInfo, fence));
-			VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
-
-			// Make device writes visible to the host
-			void *mapped;
-			vkMapMemory(device, hostMemory, 0, VK_WHOLE_SIZE, 0, &mapped);
-			VkMappedMemoryRange mappedRange = vks::initializers::mappedMemoryRange();
-			mappedRange.memory = hostMemory;
-			mappedRange.offset = 0;
-			mappedRange.size = VK_WHOLE_SIZE;
-			vkInvalidateMappedMemoryRanges(device, 1, &mappedRange);
-
-			// Copy to output
-			memcpy(computeOutput.data(), mapped, bufferSize);
-			vkUnmapMemory(device, hostMemory);
 		}
-
-		vkQueueWaitIdle(queue);
-
-		// Output buffer contents
-		LOG("Compute input:\n");
-		for (auto v : computeInput) {
-			LOG("%d \t", v);
-		}
-		std::cout << std::endl;
-
-		LOG("Compute output:\n");
-		for (auto v : computeOutput) {
-			LOG("%d \t", v);
-		}
-		std::cout << std::endl;
-
-		// Clean up
+	}
+	void submitComputeWork()
+	{
+		// Submit compute work
+		vkResetFences(device, 1, &fence);
+		const VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
+		VkSubmitInfo computeSubmitInfo = vks::initializers::submitInfo();
+		computeSubmitInfo.pWaitDstStageMask = &waitStageMask;
+		computeSubmitInfo.commandBufferCount = 1;
+		computeSubmitInfo.pCommandBuffers = &commandBuffer;
+		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &computeSubmitInfo, fence));
+		VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
+	}
+	void copyDataToHost()
+	{
+		// Make device writes visible to the host
+		void *mapped;
+		vkMapMemory(device, hostMemory, 0, VK_WHOLE_SIZE, 0, &mapped);
+		VkMappedMemoryRange mappedRange = vks::initializers::mappedMemoryRange();
+		mappedRange.memory = hostMemory;
+		mappedRange.offset = 0;
+		mappedRange.size = VK_WHOLE_SIZE;
+		vkInvalidateMappedMemoryRanges(device, 1, &mappedRange);
+		// Copy to output
+		memcpy(computeOutput.data(), mapped, bufferSize);
+		vkUnmapMemory(device, hostMemory);
+	}
+    void releaseResources()
+	{
 		vkDestroyBuffer(device, deviceBuffer, nullptr);
 		vkFreeMemory(device, deviceMemory, nullptr);
 		vkDestroyBuffer(device, hostBuffer, nullptr);
 		vkFreeMemory(device, hostMemory, nullptr);
-	}
 
-	~Compute()
-	{
 		vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 		vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 		vkDestroyDescriptorPool(device, descriptorPool, nullptr);
@@ -555,5 +526,45 @@ public:
 		}
 #endif
 		vkDestroyInstance(instance, nullptr);
+	}
+	VkResult createBuffer(VkBufferUsageFlags usageFlags, VkMemoryPropertyFlags memoryPropertyFlags, VkBuffer *buffer, VkDeviceMemory *memory, VkDeviceSize size, void *data = nullptr)
+	{
+		// Create the buffer handle
+		VkBufferCreateInfo bufferCreateInfo = vks::initializers::bufferCreateInfo(usageFlags, size);
+		bufferCreateInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+		VK_CHECK_RESULT(vkCreateBuffer(device, &bufferCreateInfo, nullptr, buffer));
+
+		// Create the memory backing up the buffer handle
+		VkPhysicalDeviceMemoryProperties deviceMemoryProperties;
+		vkGetPhysicalDeviceMemoryProperties(physicalDevice, &deviceMemoryProperties);
+		VkMemoryRequirements memReqs;
+		VkMemoryAllocateInfo memAlloc = vks::initializers::memoryAllocateInfo();
+		vkGetBufferMemoryRequirements(device, *buffer, &memReqs);
+		memAlloc.allocationSize = memReqs.size;
+		// Find a memory type index that fits the properties of the buffer
+		bool memTypeFound = false;
+		for (uint32_t i = 0; i < deviceMemoryProperties.memoryTypeCount; i++) {
+			if ((memReqs.memoryTypeBits & 1) == 1) {
+				if ((deviceMemoryProperties.memoryTypes[i].propertyFlags & memoryPropertyFlags) == memoryPropertyFlags) {
+					memAlloc.memoryTypeIndex = i;
+					memTypeFound = true;
+					break;
+				}
+			}
+			memReqs.memoryTypeBits >>= 1;
+		}
+		assert(memTypeFound);
+		VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, memory));
+
+		if (data != nullptr) {
+			void *mapped;
+			VK_CHECK_RESULT(vkMapMemory(device, *memory, 0, size, 0, &mapped));
+			memcpy(mapped, data, size);
+			vkUnmapMemory(device, *memory);
+		}
+
+		VK_CHECK_RESULT(vkBindBufferMemory(device, *buffer, *memory, 0));
+
+		return VK_SUCCESS;
 	}
 };

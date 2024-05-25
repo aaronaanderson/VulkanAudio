@@ -24,11 +24,11 @@ void audioCallback(float* outputBuffer, float* inputBuffer,
 
 int main()
 {  
-    DAC dac (audioCallback, deviceParameters);
+    // DAC dac (audioCallback, deviceParameters);
 
-    std::cout << "Enter any input to quit.\n";
-    std::string n;
-    std::cin >> n;
+    // std::cout << "Enter any input to quit.\n";
+    // std::string n;
+    // std::cin >> n;
 
     return 0;
 }
