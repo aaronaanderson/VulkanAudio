@@ -62,8 +62,12 @@ public:
 		prepareComputePipeline();
         createCommandBuffer();
 		submitComputeWork();
+		
+		// block until compute work is done
+		vkResetFences(device, 1, &fence);
+		VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
+		
 		copyDataToHost();
-
 		vkQueueWaitIdle(queue);
 
 		// Output buffer contents
@@ -311,7 +315,7 @@ private:
 		submitInfo.commandBufferCount = 1;
 		submitInfo.pCommandBuffers = &copyCmd;
 		VkFenceCreateInfo fenceInfo = vks::initializers::fenceCreateInfo(VK_FLAGS_NONE);
-		VkFence fence;
+		//VkFence fence;
 		VK_CHECK_RESULT(vkCreateFence(device, &fenceInfo, nullptr, &fence));
 
 		// Submit to the queue
@@ -394,87 +398,84 @@ private:
 	} 
 	void createCommandBuffer()
 	{
-        
-			VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
+		VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
 
-			VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &cmdBufInfo));
+		VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffer, &cmdBufInfo));
 
-			// Barrier to ensure that input buffer transfer is finished before compute shader reads from it
-			VkBufferMemoryBarrier bufferBarrier = vks::initializers::bufferMemoryBarrier();
-			bufferBarrier.buffer = deviceBuffer;
-			bufferBarrier.size = VK_WHOLE_SIZE;
-			bufferBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
-			bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-			bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		// Barrier to ensure that input buffer transfer is finished before compute shader reads from it
+	    VkBufferMemoryBarrier bufferBarrier = vks::initializers::bufferMemoryBarrier();
+		bufferBarrier.buffer = deviceBuffer;
+		bufferBarrier.size = VK_WHOLE_SIZE;
+		bufferBarrier.srcAccessMask = VK_ACCESS_HOST_WRITE_BIT;
+		bufferBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 
-			vkCmdPipelineBarrier(
-				commandBuffer,
-				VK_PIPELINE_STAGE_HOST_BIT,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				VK_FLAGS_NONE,
-				0, nullptr,
-				1, &bufferBarrier,
-				0, nullptr);
+		vkCmdPipelineBarrier(
+			commandBuffer,
+			VK_PIPELINE_STAGE_HOST_BIT,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			VK_FLAGS_NONE,
+			0, nullptr,
+			1, &bufferBarrier,
+			0, nullptr);
 
-			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
-			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, 0);
+		vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 0, 1, &descriptorSet, 0, 0);
 
-			vkCmdDispatch(commandBuffer, BUFFER_ELEMENTS, 1, 1);
+		vkCmdDispatch(commandBuffer, BUFFER_ELEMENTS, 1, 1);
 
-			// Barrier to ensure that shader writes are finished before buffer is read back from GPU
-			bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
-			bufferBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
-			bufferBarrier.buffer = deviceBuffer;
-			bufferBarrier.size = VK_WHOLE_SIZE;
-			bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		// Barrier to ensure that shader writes are finished before buffer is read back from GPU
+		bufferBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+		bufferBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+		bufferBarrier.buffer = deviceBuffer;
+		bufferBarrier.size = VK_WHOLE_SIZE;
+		bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 
-			vkCmdPipelineBarrier(
-				commandBuffer,
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-				VK_PIPELINE_STAGE_TRANSFER_BIT,
-				VK_FLAGS_NONE,
-				0, nullptr,
-				1, &bufferBarrier,
-				0, nullptr);
+		vkCmdPipelineBarrier(
+			commandBuffer,
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_FLAGS_NONE,
+			0, nullptr,
+			1, &bufferBarrier,
+			0, nullptr);
 
-			// Read back to host visible buffer
-			VkBufferCopy copyRegion = {};
-			copyRegion.size = bufferSize;
-			vkCmdCopyBuffer(commandBuffer, deviceBuffer, hostBuffer, 1, &copyRegion);
+		// Read back to host visible buffer
+		VkBufferCopy copyRegion = {};
+		copyRegion.size = bufferSize;
+		vkCmdCopyBuffer(commandBuffer, deviceBuffer, hostBuffer, 1, &copyRegion);
 
-			// Barrier to ensure that buffer copy is finished before host reading from it
-			bufferBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-			bufferBarrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
-			bufferBarrier.buffer = hostBuffer;
-			bufferBarrier.size = VK_WHOLE_SIZE;
-			bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-			bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		// Barrier to ensure that buffer copy is finished before host reading from it
+		bufferBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		bufferBarrier.dstAccessMask = VK_ACCESS_HOST_READ_BIT;
+		bufferBarrier.buffer = hostBuffer;
+		bufferBarrier.size = VK_WHOLE_SIZE;
+		bufferBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		bufferBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 
-			vkCmdPipelineBarrier(
-				commandBuffer,
-				VK_PIPELINE_STAGE_TRANSFER_BIT,
-				VK_PIPELINE_STAGE_HOST_BIT,
-				VK_FLAGS_NONE,
-				0, nullptr,
-				1, &bufferBarrier,
-				0, nullptr);
+		vkCmdPipelineBarrier(
+			commandBuffer,
+			VK_PIPELINE_STAGE_TRANSFER_BIT,
+			VK_PIPELINE_STAGE_HOST_BIT,
+			VK_FLAGS_NONE,
+			0, nullptr,
+			1, &bufferBarrier,
+			0, nullptr);
 
-			VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
+		VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffer));
 		
 	}
 	void submitComputeWork()
 	{
 		// Submit compute work
-		vkResetFences(device, 1, &fence);
 		const VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT;
 		VkSubmitInfo computeSubmitInfo = vks::initializers::submitInfo();
 		computeSubmitInfo.pWaitDstStageMask = &waitStageMask;
 		computeSubmitInfo.commandBufferCount = 1;
 		computeSubmitInfo.pCommandBuffers = &commandBuffer;
 		VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &computeSubmitInfo, fence));
-		VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
 	}
 	void copyDataToHost()
 	{
