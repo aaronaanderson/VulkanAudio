@@ -27,8 +27,12 @@ add_executable(VulkanAudio
     "Compute/VulkanTools.cpp")
 
 # compile shaders
-set(GLSLC "${Vulkan_INCLUDE_DIR}/../Bin/glslc.exe")
-message("glslc directory:  ${GLSLC}")
+if(WIN32)
+    set(GLSLC "${Vulkan_INCLUDE_DIR}/../Bin/glslc.exe")
+elseif(APPLE)
+    set(GLSLC "${Vulkan_GLSLC_EXECUTABLE}")
+endif()
+message("glslc directory:  ${Vulkan_GLSLC_EXECUTABLE}")
 
 set(SHADERS_IN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Compute/Shaders")
 set(SHADERS_OUT_DIR "${CMAKE_BINARY_DIR}/Shaders")
