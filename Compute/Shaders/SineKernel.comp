@@ -29,4 +29,3 @@ void main()
 		return;	
 	values[index] = fibonacci(values[index]);
 }
-
