@@ -26,14 +26,6 @@ add_executable(VulkanAudio
     "Main.cpp"
     "Compute/VulkanTools.cpp")
 
-# compile shaders
-if(WIN32)
-    set(GLSLC "${Vulkan_INCLUDE_DIR}/../Bin/glslc.exe")
-elseif(APPLE)
-    set(GLSLC "${Vulkan_GLSLC_EXECUTABLE}")
-endif()
-message("glslc directory:  ${Vulkan_GLSLC_EXECUTABLE}")
-
 set(SHADERS_IN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Compute/Shaders")
 set(SHADERS_OUT_DIR "${CMAKE_BINARY_DIR}/Shaders")
 
@@ -49,7 +41,7 @@ foreach(SHADER ${SHADERS})
 	add_custom_command(
 		MAIN_DEPENDENCY ${SHADER}
 		OUTPUT ${SHADER_OUT_NAME}
-		COMMAND ${GLSLC} ${SHADER} "-o" ${SHADER_OUT_NAME}
+		COMMAND ${Vulkan_GLSLC_EXECUTABLE} ${SHADER} "-o" ${SHADER_OUT_NAME}
 	    VERBATIM)
 endforeach()
 
