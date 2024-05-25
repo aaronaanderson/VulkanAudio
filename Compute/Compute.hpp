@@ -391,13 +391,14 @@ public:
 				shaderDir = commandLineParser.getValueAsString("shaders", "glsl");
 			}
 			// const std::string shadersPath = getShaderBasePath() + shaderDir + "/computeheadless/";
-            const std::string shadersPath = "../Compute/";
-
+            //const std::string shadersPath = "C:/Users/Anderson/Documents/Experimental/VulkanAudio/build/Shaders/";
+            const std::string shadersPath = SHADER_BINARY_PATH;
+			
 			VkPipelineShaderStageCreateInfo shaderStage = {};
 			shaderStage.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 			shaderStage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
 
-			shaderStage.module = vks::tools::loadShader((shadersPath + "headless.comp.spv").c_str(), device);
+			shaderStage.module = vks::tools::loadShader((shadersPath + "SineKernel.comp.spv").c_str(), device);
 
 			shaderStage.pName = "main";
 			shaderStage.pSpecializationInfo = &specializationInfo;
